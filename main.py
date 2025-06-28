@@ -10,7 +10,7 @@ word_index = imdb.get_word_index()
 reverse_word_index = dict([(value, key) for (key, value) in word_index.items()])
 
 # Load the pre-trained model with Relu activation
-model = load_model('simple_rnn_imdb.h5')
+model = load_model('simple_rnn_imdb.keras')
 
 # Step 2: Helper function to decode reviews
 def decode_review(encoded_review):
