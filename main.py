@@ -1,7 +1,7 @@
 # Step 1: Import necessary libraries
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.dataset import imdb
+from tensorflow.keras.datasets import imdb
 from tensoorflow.preprocessing import sequence
 from tensorflow.kreas.models import load_model
 
