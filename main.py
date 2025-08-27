@@ -80,18 +80,19 @@ def analyze_sentiment(model, preprocessed_input):
         prediction = model.predict(preprocessed_input, verbose=0)
         score = float(prediction[0][0])
         
-        # Differentiate sentiment based on score
-        if score > 0.8:
+        # Corrected Logic: Lower score indicates positive sentiment, higher score indicates negative.
+        if score < 0.2:
             sentiment = 'Strongly Positive'
-        elif score > 0.6:
+        elif score < 0.4:
             sentiment = 'Positive'
-        elif score > 0.4:
+        elif score < 0.6:
             sentiment = 'Neutral'
-        elif score > 0.2:
+        elif score < 0.8:
             sentiment = 'Negative'
         else:
             sentiment = 'Strongly Negative'
             
+        # Confidence calculation remains the same, as it measures distance from the neutral 0.5 midpoint.
         confidence = abs(score - 0.5) * 2
         return sentiment, confidence, score
     except Exception as e:
