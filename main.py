@@ -69,16 +69,29 @@ def preprocess_text(text, word_index, max_len=500):
     words = text.lower().strip().split()
     
     # Convert words to indices (constrained word_index ensures compatibility)
+    # The +3 offset is because 0 is for padding, 1 is for start of sequence, and 2 is for unknown words.
     encoded = [word_index.get(word, 2) + 3 for word in words]
     
     return sequence.pad_sequences([encoded], maxlen=max_len)
 
 def analyze_sentiment(model, preprocessed_input):
-    """Generate sentiment prediction with error handling."""
+    """Generate sentiment prediction with error handling and nuanced classification."""
     try:
         prediction = model.predict(preprocessed_input, verbose=0)
         score = float(prediction[0][0])
-        sentiment = 'Positive' if score > 0.5 else 'Negative'
+        
+        # Differentiate sentiment based on score
+        if score > 0.8:
+            sentiment = 'Strongly Positive'
+        elif score > 0.6:
+            sentiment = 'Positive'
+        elif score > 0.4:
+            sentiment = 'Neutral'
+        elif score > 0.2:
+            sentiment = 'Negative'
+        else:
+            sentiment = 'Strongly Negative'
+            
         confidence = abs(score - 0.5) * 2
         return sentiment, confidence, score
     except Exception as e:
@@ -97,13 +110,14 @@ def main():
     # Clean input section
     st.subheader("Review Analysis")
     
-    # Example selector (minimal)
+    # Example selector
     examples = [
         "Select a sample review...",
         "This movie exceeded all my expectations with outstanding performances.",
         "Poorly written script with terrible acting throughout.",
         "Average film with some good moments but overall forgettable.",
         "Brilliant cinematography and compelling storyline make this a masterpiece.",
+        "An absolute disaster from start to finish. A waste of time and money.",
     ]
     
     selected = st.selectbox("Sample Reviews", examples, label_visibility="collapsed")
@@ -128,8 +142,8 @@ def main():
             st.warning("Please enter a review to analyze.")
             return
         
-        if len(review_text.strip()) < 5:
-            st.warning("Please provide a more detailed review.")
+        if len(review_text.strip().split()) < 3:
+            st.warning("Please provide a more detailed review for accurate analysis.")
             return
         
         # Process analysis
@@ -150,10 +164,13 @@ def main():
         col1, col2 = st.columns(2)
         
         with col1:
-            if sentiment == 'Positive':
+            # Display sentiment with appropriate color
+            if 'Positive' in sentiment:
                 st.success(f"**{sentiment}**")
-            else:
+            elif 'Negative' in sentiment:
                 st.error(f"**{sentiment}**")
+            else:
+                st.info(f"**{sentiment}**")
         
         with col2:
             st.metric("Confidence", f"{confidence:.0%}")
@@ -172,7 +189,7 @@ def main():
         elif confidence > 0.6:
             st.warning("Moderate confidence prediction")
         else:
-            st.warning("Low confidence - consider rephrasing")
+            st.warning("Low confidence - the sentiment may be ambiguous.")
     
     # Professional footer
     st.divider()
