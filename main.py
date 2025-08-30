@@ -68,31 +68,30 @@ def preprocess_text(text, word_index, max_len=500):
     """Convert text to model input format with automatic vocabulary handling."""
     words = text.lower().strip().split()
     
-    # Convert words to indices (constrained word_index ensures compatibility)
-    # The +3 offset is because 0 is for padding, 1 is for start of sequence, and 2 is for unknown words.
+    # Convert words to indices (+3 offset: 0=pad, 1=start, 2=UNK)
     encoded = [word_index.get(word, 2) + 3 for word in words]
     
     return sequence.pad_sequences([encoded], maxlen=max_len)
 
 def analyze_sentiment(model, preprocessed_input):
-    """Generate sentiment prediction with error handling and nuanced classification."""
+    """Generate sentiment prediction with corrected IMDB score handling."""
     try:
         prediction = model.predict(preprocessed_input, verbose=0)
         score = float(prediction[0][0])
         
-        # Corrected Logic: Lower score indicates positive sentiment, higher score indicates negative.
-        if score < 0.2:
+        # ✅ Correct logic: higher score = more positive
+        if score > 0.8:
             sentiment = 'Strongly Positive'
-        elif score < 0.4:
+        elif score > 0.6:
             sentiment = 'Positive'
-        elif score < 0.6:
+        elif score > 0.4:
             sentiment = 'Neutral'
-        elif score < 0.8:
+        elif score > 0.2:
             sentiment = 'Negative'
         else:
             sentiment = 'Strongly Negative'
             
-        # Confidence calculation remains the same, as it measures distance from the neutral 0.5 midpoint.
+        # Confidence relative to neutral midpoint
         confidence = abs(score - 0.5) * 2
         return sentiment, confidence, score
     except Exception as e:
