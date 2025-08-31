@@ -1,215 +1,81 @@
+# app.py
 import streamlit as st
 import numpy as np
-import tensorflow as tf
+import pickle
 from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing import sequence
-from tensorflow.keras.datasets import imdb
-import os
-import glob
-import sys
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-# Windows path compatibility
-if sys.platform.startswith('win'):
-    import pathlib
-    pathlib.PosixPath = pathlib.WindowsPath
-
-# Professional page configuration
-st.set_page_config(
-    page_title="Sentiment Analysis Platform",
-    page_icon="📊",
-    layout="centered",
-    initial_sidebar_state="collapsed"
-)
+# -------------------------------
+# 1. Model & Word Index Paths
+# -------------------------------
+MODEL_PATH = "best_model.h5"       # Change to final_model.h5 if needed
+WORD_INDEX_PATH = "word_index.pkl"
+MAXLEN = 200
 
 @st.cache_resource
-def load_resources():
-    """Load model and vocabulary-constrained IMDB word indices."""
-    
-    # Find model files
-    model_files = []
-    for pattern in ["*.keras", "*.h5"]:
-        model_files.extend(glob.glob(pattern))
-    
-    if not model_files:
-        st.error("Model file not found. Please ensure your trained model is in the current directory.")
-        st.stop()
-    
-    # Load best available model
-    model = None
-    for model_file in sorted(model_files, key=lambda x: x.endswith('.keras'), reverse=True):
-        try:
-            model = load_model(model_file)
-            break
-        except Exception:
-            continue
-    
-    if model is None:
-        st.error("Unable to load model. Please check file integrity.")
-        st.stop()
-    
-    # Load IMDB word mappings with vocabulary constraint
-    try:
-        full_word_index = imdb.get_word_index()
-        
-        # Create vocabulary-constrained word index (top 10000 words only)
-        max_features = 10000
-        constrained_word_index = {
-            word: idx for word, idx in full_word_index.items() 
-            if idx < max_features
-        }
-        
-        return model, constrained_word_index
-        
-    except Exception:
-        st.error("Failed to load IMDB dataset. Please check your internet connection.")
-        st.stop()
+def load_sentiment_model():
+    model = load_model(MODEL_PATH)
+    with open(WORD_INDEX_PATH, "rb") as f:
+        word_index = pickle.load(f)
+    return model, word_index
 
-def preprocess_text(text, word_index, max_len=500):
-    """Convert text to model input format with automatic vocabulary handling."""
-    words = text.lower().strip().split()
-    
-    # Convert words to indices (+3 offset: 0=pad, 1=start, 2=UNK)
-    encoded = [word_index.get(word, 2) + 3 for word in words]
-    
-    return sequence.pad_sequences([encoded], maxlen=max_len)
+model, word_index = load_sentiment_model()
 
-def analyze_sentiment(model, preprocessed_input):
-    """Generate sentiment prediction with corrected IMDB score handling."""
-    try:
-        prediction = model.predict(preprocessed_input, verbose=0)
-        score = float(prediction[0][0])
-        
-        # ✅ Correct logic: higher score = more positive
-        if score > 0.8:
-            sentiment = 'Strongly Positive'
-        elif score > 0.6:
-            sentiment = 'Positive'
-        elif score > 0.4:
-            sentiment = 'Neutral'
-        elif score > 0.2:
-            sentiment = 'Negative'
+# -------------------------------
+# 2. Helper Functions
+# -------------------------------
+def encode_review(text, word_index, maxlen=MAXLEN):
+    words = text.lower().split()
+    encoded = [1]  # <START>
+    for w in words:
+        if w in word_index:
+            encoded.append(word_index[w] + 3)
         else:
-            sentiment = 'Strongly Negative'
-            
-        # Confidence relative to neutral midpoint
-        confidence = abs(score - 0.5) * 2
-        return sentiment, confidence, score
-    except Exception as e:
-        st.error(f"Prediction failed: {str(e)}")
-        return None, None, None
+            encoded.append(2)  # <UNK>
+    padded = pad_sequences([encoded], maxlen=maxlen)
+    return padded
 
-def main():
-    # Professional header
-    st.title("Sentiment Analysis Platform")
-    st.markdown("Advanced movie review sentiment classification using deep learning")
-    st.divider()
-    
-    # Load resources
-    model, word_index = load_resources()
-    
-    # Clean input section
-    st.subheader("Review Analysis")
-    
-    # Example selector
-    examples = [
-        "Select a sample review...",
-        "This movie exceeded all my expectations with outstanding performances.",
-        "Poorly written script with terrible acting throughout.",
-        "Average film with some good moments but overall forgettable.",
-        "Brilliant cinematography and compelling storyline make this a masterpiece.",
-        "An absolute disaster from start to finish. A waste of time and money.",
-    ]
-    
-    selected = st.selectbox("Sample Reviews", examples, label_visibility="collapsed")
-    
-    # Main text input
-    if selected != examples[0]:
-        default_value = selected
+def predict_sentiment(text):
+    padded = encode_review(text, word_index)
+    prob = model.predict(padded)[0][0]
+    if prob > 0.6:
+        sentiment = "😊 Positive"
+    elif prob < 0.4:
+        sentiment = "😡 Negative"
     else:
-        default_value = ""
-    
-    review_text = st.text_area(
-        "Enter Review Text",
-        value=default_value,
-        height=120,
-        placeholder="Write your movie review here...",
-        label_visibility="collapsed"
-    )
-    
-    # Analysis button
-    if st.button("Analyze Sentiment", type="primary", use_container_width=True):
-        if not review_text.strip():
-            st.warning("Please enter a review to analyze.")
-            return
-        
-        if len(review_text.strip().split()) < 3:
-            st.warning("Please provide a more detailed review for accurate analysis.")
-            return
-        
-        # Process analysis
-        with st.spinner("Processing..."):
-            preprocessed = preprocess_text(review_text, word_index)
-            sentiment, confidence, score = analyze_sentiment(model, preprocessed)
-        
-        # Check for prediction errors
-        if sentiment is None:
-            st.error("Unable to analyze this review. Please try different text.")
-            return
-        
-        # Results section
-        st.divider()
-        st.subheader("Analysis Results")
-        
-        # Clean results display
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Display sentiment with appropriate color
-            if 'Positive' in sentiment:
-                st.success(f"**{sentiment}**")
-            elif 'Negative' in sentiment:
-                st.error(f"**{sentiment}**")
-            else:
-                st.info(f"**{sentiment}**")
-        
-        with col2:
-            st.metric("Confidence", f"{confidence:.0%}")
-        
-        # Technical metrics (collapsed by default)
-        with st.expander("Detailed Metrics"):
-            metric_col1, metric_col2 = st.columns(2)
-            with metric_col1:
-                st.metric("Prediction Score", f"{score:.4f}")
-            with metric_col2:
-                st.metric("Word Count", len(review_text.split()))
-        
-        # Confidence interpretation
-        if confidence > 0.8:
-            st.info("High confidence prediction")
-        elif confidence > 0.6:
-            st.warning("Moderate confidence prediction")
-        else:
-            st.warning("Low confidence - the sentiment may be ambiguous.")
-    
-    # Professional footer
-    st.divider()
-    
-    # Minimal sidebar with technical info
-    with st.sidebar:
-        st.header("Model Information")
-        st.info(f"""
-        **Framework**: TensorFlow {tf.__version__}
-        **Architecture**: Recurrent Neural Network
-        **Training Data**: IMDB Movie Reviews
-        **Vocabulary**: 10,000 words
-        """)
-        
-        if st.button("View System Info"):
-            st.code(f"""
-Python: {sys.version.split()[0]}
-Platform: {sys.platform}
-Model Input: {model.input_shape if hasattr(model, 'input_shape') else 'N/A'}
-            """)
+        sentiment = "😐 Neutral"
+    return sentiment, prob
 
-if __name__ == "__main__":
-    main()
+# -------------------------------
+# 3. Streamlit UI
+# -------------------------------
+st.set_page_config(page_title="💬 Sentiment Analysis App", layout="wide")
+
+st.title("💬 Sentiment Analysis App")
+st.write("Analyze text sentiment with Deep Learning 🚀")
+
+# Sample reviews
+sample_reviews = [
+    "Absolutely loved the movie! Amazing performance!",
+    "It was okay, not the best but not bad either.",
+    "Terrible experience. Will never recommend.",
+    "The plot was average but the acting was good.",
+    "Best film I've seen this year! Brilliant!",
+    "Mediocre movie, could be better.",
+    "Horrible acting, very disappointing."
+]
+
+st.subheader("🧪 Try a sample or write your own")
+option = st.selectbox("Pick a sample review:", ["-- Choose a sample --"] + sample_reviews)
+
+text_input = st.text_area("✍️ Or write your own text:", "")
+
+# If user selects a sample, override text_input
+if option != "-- Choose a sample --":
+    text_input = option
+
+if st.button("📊 Predict Sentiment") and text_input.strip() != "":
+    sentiment, confidence = predict_sentiment(text_input)
+    st.markdown(f"**Sentiment:** {sentiment}")
+    st.markdown(f"**Confidence Level:** {confidence*100:.2f}%")
+    st.info("Tip: Sentiment prediction depends on vocabulary seen during training; unusual words may reduce accuracy.")
