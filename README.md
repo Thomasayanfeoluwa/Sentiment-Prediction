@@ -25,7 +25,7 @@ This application uses text‑based data to classify sentiment and provide insigh
 
 ## 🚀 Get Started Locally  
 ```bash
-git clone https://github.com/YourUsername/sentiment‑prediction‑app.git  
+git clone https://github.com/Thomasayanfeoluwa/Sentiment-Prediction
 cd sentiment‑prediction‑app  
 python3 -m venv venv  
 source venv/bin/activate  
